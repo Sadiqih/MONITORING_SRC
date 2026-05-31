@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Monitoring Perlintasan Sebidang Terintegrasi</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #0b0f19; color: #f3f4f6; margin: 0; padding: 15px; }
+        .container { max-width: 1600px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1f2937; padding-bottom: 10px; margin-bottom: 20px; }
+        header h1 { margin: 0; color: #38bdf8; font-size: 24px; }
+        
+        .btn-group { display: flex; gap: 10px; }
+        button { padding: 10px 18px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        .btn-download { background-color: #10b981; color: white; }
+        .btn-download:hover { background-color: #059669; }
+        .btn-reset { background-color: #ef4444; color: white; }
+        .btn-reset:hover { background-color: #dc2626; }
+
+        .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+        .grid-4col { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 15px; margin-bottom: 15px; }
+        
+        .card { background: #111827; padding: 15px; border-radius: 10px; border: 1px solid #1f2937; }
+        .card h2 { margin-top: 0; font-size: 16px; color: #9ca3af; border-bottom: 1px solid #1f2937; padding-bottom: 6px; }
+
+        .video-box { position: relative; background: #000; border-radius: 6px; overflow: hidden; aspect-ratio: 16/9; }
+        .video-box img { width: 100%; height: 100%; object-fit: cover; }
+        .v-label { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.7); padding: 4px 10px; font-size: 11px; color: #38bdf8; border-radius: 4px; }
+
+        .status-box { display: flex; align-items: center; justify-content: center; height: 60px; border-radius: 6px; font-size: 16px; font-weight: bold; color: #fff; background: #4b5563; }
+        .bg-aman { background-color: #047857; }
+        .bg-bahaya { background-color: #b91c1c; animation: flash 1s infinite; }
+        .bg-proses { background-color: #b45309; }
+        @keyframes flash { 50% { opacity: 0.7; } }
+
+        .info-item { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 1px solid #1f2937; }
+        .info-item span:first-child { color: #6b7280; }
+
+        .table-wrapper { max-height: 350px; overflow-y: auto; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #1f2937; }
+        th { background: #1f2937; color: #38bdf8; position: sticky; top: 0; }
+        tr:hover { background: #1e293b; }
+        
+        .badge { padding: 2px 5px; border-radius: 3px; font-size: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div>
+            <h1>Sistem Monitoring Perlintasan Terpadu</h1>
+            <p style="margin: 3px 0 0 0; color: #6b7280; font-size:12px;">Pusat Analisis Sinkronisasi Respons Kecerdasan Buatan dan Hardware</p>
+        </div>
+        <div class="btn-group">
+            <button class="btn-download" onclick="downloadMasterCSV()">Unduh Data CSV Log</button>
+            <button class="btn-reset" onclick="resetDashboardData()">Reset Tampilan & Data</button>
+        </div>
+    </header>
+
+    <div class="grid-2col">
+        <div class="card">
+            <h2>Kamera 1: Pemantau Kedatangan Kereta Api (YOLO)</h2>
+            <div class="video-box">
+                <span class="v-label">LIVE CAM 01 - INDOOR/OUTDOOR</span>
+                <img id="stream1" src="http://localhost:5001/video_feed_kedatangan" onerror="this.src='https://placehold.co/640x360/111827/6b7280?text=Kamera+Kedatangan+Offline';">
+            </div>
+        </div>
+        <div class="card">
+            <h2>Kamera 2: Pemantau Area Perlintasan Sebidang (YOLO)</h2>
+            <div class="video-box">
+                <span class="v-label">LIVE CAM 02 - CROSSING AREA</span>
+                <img id="stream2" src="http://localhost:5002/video_feed_perlintasan" onerror="this.src='https://placehold.co/640x360/111827/6b7280?text=Kamera+Perlintasan+Offline';">
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-4col">
+        <div class="card">
+            <h2>1. Deteksi Kedatangan</h2>
+            <div id="statusDtg" class="status-box bg-aman">STANDBY</div>
+            <div class="info-item"><span>ID Kereta:</span><span id="dtgId">-</span></div>
+            <div class="info-item"><span>Kelas Objek:</span><span id="dtgClass">-</span></div>
+            <div class="info-item"><span>Waktu Deteksi:</span><span id="dtgTime">-</span></div>
+        </div>
+
+        <div class="card">
+            <h2>2. Kondisi Area Perlintasan</h2>
+            <div id="statusArea" class="status-box bg-aman">STERIL / AMAN</div>
+            <div class="info-item"><span>Objek Tertahan:</span><span id="areaObj">-</span></div>
+            <div class="info-item"><span>ID Pelanggar:</span><span id="areaId">-</span></div>
+            <div class="info-item"><span>Waktu Kejadian:</span><span id="areaTime">-</span></div>
+        </div>
+
+        <div class="card">
+            <h2>3. Aktuator (Servo & Sinyal)</h2>
+            <div id="statusAct" class="status-box bg-aman">PALANG TERBUKA</div>
+            <div class="info-item"><span>Posisi Servo Utama:</span><span id="actServo">90°</span></div>
+            <div class="info-item"><span>Status Mekanis Pintu:</span><span id="status-palang" style="color: #38bdf8; font-weight: bold;">-</span></div>
+            <div class="info-item"><span>Lampu Sinyal:</span><span id="actLamp">HIJAU</span></div>
+            <div class="info-item"><span>Latensi Mekanis:</span><span id="actLatency">-</span></div>
+        </div>
+
+        <div class="card">
+            <h2>4. Sensor Kepergian</h2>
+            <div id="statusKep" class="status-box bg-aman">STANDBY</div>
+            <div class="info-item"><span>Status Loop:</span><span id="kepLoop">Inaktif</span></div>
+            <div class="info-item"><span>Deteksi Roda:</span><span id="kepWheel">-</span></div>
+            <div class="info-item"><span>Waktu Lepas:</span><span id="kepTime">-</span></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Data Logger Master Terpadu (Sinkronisasi Semua Sistem & Waktu Komparatif)</h2>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Waktu Sistem (Web)</th>
+                        <th>Asal Komponen</th>
+                        <th>Jenis Event</th>
+                        <th>ID Objek</th>
+                        <th>Klasifikasi</th>
+                        <th>Waktu Perangkat</th>
+                        <th>Latensi Fisik (Hardware)</th>
+                        <th>Indikator Lampu</th>
+                    </tr>
+                </thead>
+                <tbody id="masterLogBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    let masterDatabaseLog = [];
+
+    const MQTT_HOST = "f89f938116df4dee81d5215df5ba4782.s1.eu.hivemq.cloud";
+    const MQTT_PORT = 8884; 
+    const CLIENT_ID = "WebMasterDashboard_" + Math.random().toString(16).substr(2, 8);
+
+    const client = new Paho.MQTT.Client(MQTT_HOST, MQTT_PORT, CLIENT_ID);
+    client.onMessageArrived = onMessageArrived;
+    
+    client.connect({
+        useSSL: true, 
+        userName: "intelligent", 
+        password: "Penem2018",
+        onSuccess: () => {
+            client.subscribe("servo");
+            client.subscribe("servo_ack");
+            console.log("[MQTT] Terhubung & Subscribed ke Broker.");
+        },
+        onFailure: (error) => {
+            console.error("[MQTT ERROR] Gagal Terhubung:", error.errorMessage);
+        }
+    });
+
+    function onMessageArrived(message) {
+        const topic = message.destinationName;
+        const payload = message.payloadString;
+        const localTime = new Date().toLocaleString('id-ID');
+
+        console.log(`[MQTT INBOUND] Topik: ${topic} | Payload: ${payload}`);
+
+        try {
+            const data = JSON.parse(payload);
+            let logRow = {
+                waktu_web: localTime, komponen: "", event: data.msg || "-",
+                id: data.id !== undefined ? data.id : "-", cls: data.class || "-",
+                waktu_alat: data.timestamp || data.train_timestamp || "-",
+                latensi: "-", lampu: "-"
+            };
+            
+            // Tangkap status pintu jika ada
+            if(data.gate_status) {
+                document.getElementById("status-palang").innerText = data.gate_status;
+            }
+
+            if (topic === "servo") {
+                if (data.msg === "dtg") {
+                    logRow.komponen = "Kamera Kedatangan (YOLO)";
+                    
+                    document.getElementById("statusDtg").className = "status-box bg-bahaya";
+                    document.getElementById("statusDtg").innerText = "KERETA MENDEKAT";
+                    document.getElementById("dtgId").innerText = data.id;
+                    document.getElementById("dtgClass").innerText = data.class;
+                    document.getElementById("dtgTime").innerText = logRow.waktu_alat;
+
+                    document.getElementById("statusAct").className = "status-box bg-proses";
+                    document.getElementById("statusAct").innerText = "PROSES TUTUP";
+                } 
+                else if (data.msg === "prg") {
+                    logRow.komponen = "Kamera Kedatangan / Sensor (YOLO)";
+                    
+                    document.getElementById("statusDtg").className = "status-box bg-aman";
+                    document.getElementById("statusDtg").innerText = "STANDBY";
+                    document.getElementById("statusKep").className = "status-box bg-aman";
+                    document.getElementById("statusKep").innerText = "SELESAI";
+                    document.getElementById("kepLoop").innerText = "Inaktif";
+                    document.getElementById("kepWheel").innerText = "Clear";
+                    document.getElementById("kepTime").innerText = logRow.waktu_alat;
+                }
+                else if (data.msg === "DANGER" || data.msg === "SAFE") {
+                    logRow.komponen = "Kamera Perlintasan (YOLO)";
+                    
+                    document.getElementById("statusArea").className = data.msg === "DANGER" ? "status-box bg-bahaya" : "status-box bg-aman";
+                    document.getElementById("statusArea").innerText = data.msg === "DANGER" ? "TERGANGGU / BAHAYA" : "STERIL / AMAN";
+                    document.getElementById("areaObj").innerText = data.class || "-";
+                    document.getElementById("areaId").innerText = data.id !== undefined ? data.id : "-";
+                    document.getElementById("areaTime").innerText = logRow.waktu_alat;
+                }
+            } 
+            else if (topic === "servo_ack") {
+                logRow.komponen = "Palang Servo & Lampu (ESP32)";
+                logRow.latensi = (data.action_latency_ms || "0") + " ms";
+                
+                let rL = data.red_led_status;
+                let gL = data.green_led_status;
+                logRow.lampu = `Merah: ${rL==1?'ON':'OFF'} | Hijau: ${gL==1?'ON':'OFF'}`;
+
+                document.getElementById("actServo").innerText = (data.servo_pos_final || "90") + "°";
+                document.getElementById("actLamp").innerText = rL === 1 ? "MERAH AKTIF" : "HIJAU AKTIF";
+                document.getElementById("actLatency").innerText = logRow.latensi;
+
+                if (data.msg === "dtg") {
+                    document.getElementById("statusAct").className = "status-box bg-bahaya";
+                    document.getElementById("statusAct").innerText = "TERKUNCI / TERTUTUP";
+                    
+                    document.getElementById("statusKep").className = "status-box bg-proses";
+                    document.getElementById("statusKep").innerText = "MONITOR RODA";
+                    document.getElementById("kepLoop").innerText = "Aktif Mencari Roda";
+                } else if (data.msg === "prg") {
+                    document.getElementById("statusAct").className = "status-box bg-aman";
+                    document.getElementById("statusAct").innerText = "PALANG TERBUKA";
+                }
+            }
+
+            masterDatabaseLog.push(logRow);
+            renderTableRecord(logRow);
+
+        } catch (e) { 
+            console.error("[JSON PARSE ERROR] Payload rusak atau tidak sesuai aturan standar JSON:", e); 
+        }
+    }
+
+    function renderTableRecord(row) {
+        const tbody = document.getElementById("masterLogBody");
+        const tr = tbody.insertRow(0);
+        tr.innerHTML = `
+            <td>${row.waktu_web}</td>
+            <td style="color:#38bdf8;">${row.komponen}</td>
+            <td><span class="badge ${row.event=='dtg'?'bg-bahaya':row.event=='prg'?'bg-aman':'bg-proses'}">${row.event}</span></td>
+            <td>${row.id}</td>
+            <td>${row.cls}</td>
+            <td>${row.waktu_alat}</td>
+            <td style="font-weight:bold; color:#f59e0b;">${row.latensi}</td>
+            <td style="color:#9ca3af;">${row.lampu}</td>
+        `;
+    }
+
+    // --- PERBAIKAN PADA FUNGSI DOWNLOAD MENGGUNAKAN METODE BLOB ---
+    function downloadMasterCSV() {
+        if(masterDatabaseLog.length === 0) { 
+            alert("Tidak ada data untuk diunduh! Tunggu hingga ada log masuk."); 
+            return; 
+        }
+        
+        let csvContent = "Waktu_Web,Komponen_Asal,Jenis_Event,ID_Objek,Klasifikasi,Waktu_Perangkat,Latensi_Hardware,Status_Lampu\n";
+
+        masterDatabaseLog.forEach(row => {
+            csvContent += `"${row.waktu_web}","${row.komponen}","${row.event}","${row.id}","${row.cls}","${row.waktu_alat}","${row.latensi}","${row.lampu}"\n`;
+        });
+
+        // Menggunakan Blob untuk menghindari limitasi ukuran string URL dan Error karakter spesial
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", "LOG_MASTER_SISTEM_TERPADU.csv");
+        
+        // Append ke body sementara untuk dieksekusi kliknya
+        document.body.appendChild(link);
+        link.click();
+        
+        // Hapus link dan bebaskan memori browser
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    function resetDashboardData() {
+        if(confirm("Apakah Anda yakin ingin menghapus seluruh log data dan mereset dashboard?")) {
+            masterDatabaseLog = [];
+            document.getElementById("masterLogBody").innerHTML = "";
+            
+            const amans = ["statusDtg", "statusArea", "statusAct", "statusKep"];
+            amans.forEach(id => {
+                document.getElementById(id).className = "status-box bg-aman";
+                if(id=="statusArea") document.getElementById(id).innerText = "STERIL / AMAN";
+                else if(id=="statusAct") document.getElementById(id).innerText = "PALANG TERBUKA";
+                else document.getElementById(id).innerText = "STANDBY";
+            });
+
+            const fields = ["dtgId","dtgClass","dtgTime","areaObj","areaId","areaTime","actServo","actLamp","actLatency","kepLoop","kepWheel","kepTime", "status-palang"];
+            fields.forEach(f => {
+                const el = document.getElementById(f);
+                if(el) el.innerText = "-";
+            });
+            document.getElementById("actServo").innerText = "90°";
+            document.getElementById("actLamp").innerText = "HIJAU";
+        }
+    }
+</script>
+</body>
+</html>
