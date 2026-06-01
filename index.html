@@ -3,46 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Monitoring Perlintasan Sebidang Terintegrasi (MQTT Stream)</title>
+    <title>Dashboard Analisis & Monitoring Perlintasan Sebidang Terintegrasi (4-Servos)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
     <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #0b0f19; color: #f3f4f6; margin: 0; padding: 15px; }
-        .container { max-width: 1600px; margin: 0 auto; }
-        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1f2937; padding-bottom: 10px; margin-bottom: 20px; }
-        header h1 { margin: 0; color: #38bdf8; font-size: 24px; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #080c14; color: #f3f4f6; margin: 0; padding: 15px; }
+        .container { max-width: 1750px; margin: 0 auto; }
         
+        /* Header */
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1f2937; padding-bottom: 12px; margin-bottom: 15px; }
+        header h1 { margin: 0; color: #38bdf8; font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+        .mqtt-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-left: 10px; background-color: #ef4444; color: white; }
+        .mqtt-connected { background-color: #10b981; }
+        
+        /* Buttons */
         .btn-group { display: flex; gap: 10px; }
-        button { padding: 10px 18px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
-        .btn-download { background-color: #10b981; color: white; }
-        .btn-download:hover { background-color: #059669; }
-        .btn-reset { background-color: #ef4444; color: white; }
-        .btn-reset:hover { background-color: #dc2626; }
+        button { padding: 10px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 13px; }
+        .btn-download { background-color: #2563eb; color: white; border: 1px solid #3b82f6; }
+        .btn-download:hover { background-color: #1d4ed8; }
+        .btn-reset { background-color: #374151; color: #d1d5db; border: 1px solid #4b5563; }
+        .btn-reset:hover { background-color: #4b5563; color: white; }
 
-        .grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
-        .grid-4col { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 15px; margin-bottom: 15px; }
+        /* Layout Grid */
+        .main-layout { display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 15px; }
+        @media(min-width: 1280px) {
+            .main-layout { grid-template-columns: 520px 1fr; }
+        }
         
-        .card { background: #111827; padding: 15px; border-radius: 10px; border: 1px solid #1f2937; }
-        .card h2 { margin-top: 0; font-size: 16px; color: #9ca3af; border-bottom: 1px solid #1f2937; padding-bottom: 6px; }
+        /* Mimic Panel 4 Servo */
+        .mimic-card { background: #111827; padding: 20px; border-radius: 10px; border: 1px solid #1f2937; display: flex; flex-direction: column; justify-content: flex-start; position: relative; }
+        .mimic-title { font-size: 11px; color: #9ca3af; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 15px; border-bottom: 1px solid #1f2937; padding-bottom: 6px;}
+        
+        /* Grid Rumah Palang (Kiri-Kanan Simetris) */
+        .quadrant-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 100%; }
+        /* 🟢 PERBAIKAN: Tinggi dinaikkan menjadi 140px agar palang yang tegak memiliki ruang vertikal bebas */
+        .gate-post-box { background: #1f2937; padding: 15px; border-radius: 8px; border: 1px solid #374151; display: flex; flex-direction: column; justify-content: space-between; height: 140px; position: relative; }
+        .gate-label { font-size: 11px; font-weight: bold; color: #38bdf8; display: flex; justify-content: space-between; width: 100%; z-index: 5; }
+        
+        /* Desain Jalan & Posisi Engsel */
+        /* 🟢 PERBAIKAN: Aturan overflow: hidden DIHAPUS agar gerakan palang ke atas tidak terpotong/hilang */
+        .gate-track-line { width: 100%; height: 40px; border-bottom: 3px dashed #4b5563; position: absolute; bottom: 15px; left: 0; right: 0; background: #151f32; }
+        
+        /* Palang Desain Indonesia (Garis Blok Merah Putih Tebal) */
+        .gate-arm-bar { position: absolute; bottom: 18px; width: 75%; height: 8px; background: repeating-linear-gradient(90deg, #ef4444, #ef4444 20px, #ffffff 20px, #ffffff 40px); transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1); border-radius: 2px; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .gate-pivot-node { position: absolute; bottom: 14px; width: 16px; height: 16px; background: #f59e0b; border: 2px solid #374151; border-radius: 4px; z-index: 4; }
 
-        .video-box { position: relative; background: #000; border-radius: 6px; overflow: hidden; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; }
-        .video-box img { width: 100%; height: 100%; object-fit: contain; background: #000; }
-        .v-label { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.7); padding: 4px 10px; font-size: 11px; color: #38bdf8; border-radius: 4px; z-index: 10; }
+        /* Pengaturan Sisi Kiri (Servo 1 & 2) */
+        .pivot-left .gate-pivot-node { left: 15px; }
+        .pivot-left .gate-arm-bar { left: 25px; transform-origin: left center; transform: rotate(-90deg); }
 
-        .status-box { display: flex; align-items: center; justify-content: center; height: 60px; border-radius: 6px; font-size: 16px; font-weight: bold; color: #fff; background: #4b5563; }
-        .bg-aman { background-color: #047857; }
-        .bg-bahaya { background-color: #b91c1c; animation: flash 1s infinite; }
-        .bg-proses { background-color: #b45309; }
-        @keyframes flash { 50% { opacity: 0.7; } }
+        /* Pengaturan Sisi Kanan (Servo 3 & 4) */
+        .pivot-right .gate-pivot-node { right: 15px; }
+        .pivot-right .gate-arm-bar { right: 25px; transform-origin: right center; transform: rotate(90deg); }
 
-        .info-item { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 1px solid #1f2937; }
-        .info-item span:first-child { color: #6b7280; }
+        /* Sub-System Grid (Sinyal Utama JPL Masuk Sini) */
+        .grid-5col { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; width: 100%; }
+        .card { background: #111827; padding: 15px; border-radius: 10px; border: 1px solid #1f2937; display: flex; flex-direction: column; justify-content: flex-start; }
+        .card h2 { margin-top: 0; font-size: 13px; color: #9ca3af; border-bottom: 1px solid #1f2937; padding-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
 
-        .table-wrapper { max-height: 350px; overflow-y: auto; margin-top: 10px; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #1f2937; }
-        th { background: #1f2937; color: #38bdf8; position: sticky; top: 0; }
+        /* Status Box Components */
+        .status-box { display: flex; align-items: center; justify-content: center; height: 50px; border-radius: 6px; font-size: 14px; font-weight: bold; color: #fff; background: #374151; margin-bottom: 12px; text-align: center;}
+        .bg-standby { background-color: #1f2937; color: #9ca3af; border: 1px solid #374151; }
+        .bg-safe { background-color: #065f46; color: #34d399; border: 1px solid #047857; }
+        .bg-danger { background-color: #991b1b; color: #fca5a5; border: 1px solid #b91c1c; animation: flash-card 1s infinite; }
+        .bg-processing { background-color: #9a3412; color: #fed7aa; border: 1px solid #c2410c; }
+        @keyframes flash-card { 50% { border-color: #ef4444; box-shadow: 0 0 10px rgba(239,68,68,0.3); } }
+
+        /* Komponen Dasbor Sinyal Utama JPL (Vertikal) */
+        .jpl-signal-tower { display: flex; flex-direction: column; align-items: center; background: #000; padding: 12px 8px; border-radius: 30px; border: 3px solid #374151; width: 45px; margin: 10px auto; box-shadow: 0 4px 10px rgba(0,0,0,0.7); gap: 12px; }
+        .jpl-led { width: 26px; height: 26px; border-radius: 50%; background-color: #1a1a1a; border: 2px solid #4b5563; box-shadow: inset 0 0 5px rgba(0,0,0,0.9); transition: all 0.2s; }
+        .jpl-led.top-red.active { background-color: #ef4444; box-shadow: 0 0 15px #ef4444; animation: blinkJplTop 0.5s infinite alternate; }
+        .jpl-led.bottom-red.active { background-color: #ef4444; box-shadow: 0 0 15px #ef4444; animation: blinkJplBottom 0.5s infinite alternate; }
+        @keyframes blinkJplTop { 0% { opacity: 0.2; } 100% { opacity: 1; } }
+        @keyframes blinkJplBottom { 0% { opacity: 1; } 100% { opacity: 0.2; } }
+
+        /* Telemetry Items */
+        .info-group { display: flex; flex-direction: column; gap: 4px; width: 100%; margin-top: auto; }
+        .info-item { display: flex; justify-content: space-between; padding: 5px 0; font-size: 12px; border-bottom: 1px solid #1f2937; }
+        .info-item span:first-child { color: #9ca3af; }
+        .info-item span:last-child { font-weight: 600; color: #f3f4f6; }
+        .highlight-val { color: #38bdf8 !important; }
+
+        /* Multi-Timestamp Big Table Logger */
+        .logger-card { background: #111827; padding: 15px; border-radius: 10px; border: 1px solid #1f2937; margin-top: 15px; }
+        .table-wrapper { max-height: 380px; overflow-y: auto; overflow-x: auto; margin-top: 10px; border: 1px solid #1f2937; border-radius: 6px; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; white-space: nowrap; }
+        th, td { padding: 10px 12px; border-bottom: 1px solid #1f2937; }
+        th { background: #1f2937; color: #38bdf8; position: sticky; top: 0; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; z-index: 2; }
         tr:hover { background: #1e293b; }
-        .badge { padding: 2px 5px; border-radius: 3px; font-size: 10px; font-weight: bold; }
+        
+        .badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block; }
+        .badge-dtg { background: #7f1d1d; color: #fca5a5; }
+        .badge-prg { background: #064e3b; color: #6ee7b7; }
+        .badge-danger { background: #b91c1c; color: white; }
+        .badge-safe { background: #047857; color: white; }
+        .badge-hb { background: #374151; color: #9ca3af; }
+        
+        .latency-text { font-family: monospace; font-weight: bold; color: #f59e0b; }
     </style>
 </head>
 <body>
@@ -50,82 +106,137 @@
 <div class="container">
     <header>
         <div>
-            <h1>Sistem Monitoring Perlintasan Terpadu</h1>
-            <p style="margin: 3px 0 0 0; color: #6b7280; font-size:12px;">Pusat Analisis Sinkronisasi Respons Kecerdasan Buatan dan MQTT Video Stream</p>
+            <h1>Sistem Monitoring Perlintasan Terpadu <span id="mqttStatus" class="mqtt-badge">MQTT DISCONNECTED</span></h1>
+            <p style="margin: 4px 0 0 0; color: #9ca3af; font-size:12px;">Analisis Presisi Respons Rantai Waktu Kendali 4 Palang Pintu Berbasis Jaringan Broker HiveMQ Cloud</p>
         </div>
         <div class="btn-group">
-            <button class="btn-download" onclick="downloadMasterCSV()">Unduh Data CSV Log</button>
-            <button class="btn-reset" onclick="resetDashboardData()">Reset Tampilan & Data</button>
+            <button class="btn-download" onclick="downloadMasterCSV()">Unduh Data Master Log (.CSV)</button>
+            <button class="btn-reset" onclick="resetDashboardData()">Reset Tampilan Web</button>
         </div>
     </header>
 
-    <div class="grid-2col">
-        <div class="card">
-            <h2>Kamera 1: Kedatangan (Topik: detection/image1)</h2>
-            <div class="video-box">
-                <span class="v-label">LIVE CAM 01 - ARRIVAL VIEW</span>
-                <!-- Source awal dikosongkan, akan diisi oleh MQTT -->
-                <img id="stream1" alt="Menunggu stream kamera 1...">
+    <div class="main-layout">
+        <div class="mimic-card">
+            <div class="mimic-title">Mimic Status Real-Time 4-Quadrant Servo Perlintasan</div>
+            
+            <div class="quadrant-grid">
+                <div class="gate-post-box pivot-left">
+                    <div class="gate-label"><span>Servo 1 (Masuk Kiri)</span><span id="degS1" style="color:#f59e0b;">90°</span></div>
+                    <div class="gate-track-line">
+                        <div class="gate-pivot-node"></div>
+                        <div id="gateArm1" class="gate-arm-bar"></div>
+                    </div>
+                </div>
+
+                <div class="gate-post-box pivot-right">
+                    <div class="gate-label"><span>Servo 3 (Masuk Kanan)</span><span id="degS3" style="color:#f59e0b;">90°</span></div>
+                    <div class="gate-track-line">
+                        <div class="gate-pivot-node"></div>
+                        <div id="gateArm3" class="gate-arm-bar"></div>
+                    </div>
+                </div>
+
+                <div class="gate-post-box pivot-left">
+                    <div class="gate-label"><span>Servo 2 (Keluar Kiri)</span><span id="degS2" style="color:#f59e0b;">90°</span></div>
+                    <div class="gate-track-line">
+                        <div class="gate-pivot-node"></div>
+                        <div id="gateArm2" class="gate-arm-bar"></div>
+                    </div>
+                </div>
+
+                <div class="gate-post-box pivot-right">
+                    <div class="gate-label"><span>Servo 4 (Keluar Kanan)</span><span id="degS4" style="color:#f59e0b;">90°</span></div>
+                    <div class="gate-track-line">
+                        <div class="gate-pivot-node"></div>
+                        <div id="gateArm4" class="gate-arm-bar"></div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 15px; font-size: 10px; color: #6b7280; text-align: center; width: 100%;">
+                *Arah Servo disesuaikan dengan regulasi perlintasan dua arah: Sisi Kiri (Engsel Kiri) & Sisi Kanan (Engsel Kanan).
             </div>
         </div>
-        <div class="card">
-            <h2>Kamera 2: Area Perlintasan (Topik: detection/image2)</h2>
-            <div class="video-box">
-                <span class="v-label">LIVE CAM 02 - CROSSING VIEW</span>
-                <!-- Source awal dikosongkan, akan diisi oleh MQTT -->
-                <img id="stream2" alt="Menunggu stream kamera 2...">
+
+        <div class="grid-5col">
+            <div class="card">
+                <h2>1. Kamera Kedatangan (Cam 1)</h2>
+                <div id="cardDtg" class="status-box bg-standby">STANDBY</div>
+                <div class="info-group">
+                    <div class="info-item"><span>ID Kereta:</span><span id="txtDtgId">-</span></div>
+                    <div class="info-item"><span>Klasifikasi:</span><span id="txtDtgClass">-</span></div>
+                    <div class="info-item"><span>TS Cam 1:</span><span id="txtDtgTime" class="highlight-val">-</span></div>
+                    <div class="info-item"><span>Latensi Trans:</span><span id="txtDtgLat" class="latency-text">-</span></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>2. Kamera Lintasan (Cam 2)</h2>
+                <div id="cardArea" class="status-box bg-safe">STERIL / AMAN</div>
+                <div class="info-group">
+                    <div class="info-item"><span>Hambatan:</span><span id="txtAreaStatus">CLEAR</span></div>
+                    <div class="info-item"><span>Pelanggar:</span><span id="txtAreaObj">-</span></div>
+                    <div class="info-item"><span>TS Cam 2:</span><span id="txtAreaTime" class="highlight-val">-</span></div>
+                    <div class="info-item"><span>Latensi Net:</span><span id="txtAreaLat" class="latency-text">-</span></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>3. Kontrol Aktuator Pintu</h2>
+                <div id="cardAct" class="status-box bg-safe">PALANG TERBUKA</div>
+                <div class="info-group">
+                    <div class="info-item"><span>Matriks Servo:</span><span id="txtActServo" class="highlight-val">90° | 90° | 90° | 90°</span></div>
+                    <div class="info-item"><span>Struktural:</span><span id="txtActGateStatus">-</span></div>
+                    <div class="info-item"><span>Mekanikal Lat:</span><span id="txtActLat" class="latency-text">-</span></div>
+                    <div class="info-item"><span>Sinyal Lampu:</span><span id="txtActLamp">PADAM (STANDBY)</span></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>4. Sensor Kepergian (ESP32)</h2>
+                <div id="cardKep" class="status-box bg-standby">STANDBY</div>
+                <div class="info-group">
+                    <div class="info-item"><span>Loop Roda:</span><span id="txtKepLoop">Inaktif</span></div>
+                    <div class="info-item"><span>Logik Sensor:</span><span id="txtKepSensor">-</span></div>
+                    <div class="info-item"><span>TS Lepas:</span><span id="txtKepTime" class="highlight-val">-</span></div>
+                    <div class="info-item"><span>Heartbeat:</span><span id="txtKepHb">-</span></div>
+                </div>
+            </div>
+
+            <div class="card" style="align-items: center;">
+                <h2>5. Sinyal Utama JPL</h2>
+                <div id="cardSinyal" class="status-box bg-safe" style="width:100%; margin-bottom: 5px;">PADAM</div>
+                
+                <div class="jpl-signal-tower">
+                    <div id="jplLedTop" class="jpl-led"></div>
+                    <div id="jplLedBottom" class="jpl-led"></div>
+                </div>
+                
+                <div style="font-size: 10px; color:#6b7280; text-align:center; margin-top:5px;"></div>
             </div>
         </div>
     </div>
 
-    <!-- Panel Status (Sama seperti sebelumnya) -->
-    <div class="grid-4col">
-        <div class="card">
-            <h2>1. Deteksi Kedatangan</h2>
-            <div id="statusDtg" class="status-box bg-aman">STANDBY</div>
-            <div class="info-item"><span>ID Kereta:</span><span id="dtgId">-</span></div>
-            <div class="info-item"><span>Kelas Objek:</span><span id="dtgClass">-</span></div>
-            <div class="info-item"><span>Waktu Deteksi:</span><span id="dtgTime">-</span></div>
-        </div>
-        <div class="card">
-            <h2>2. Kondisi Area Perlintasan</h2>
-            <div id="statusArea" class="status-box bg-aman">STERIL / AMAN</div>
-            <div class="info-item"><span>Objek Tertahan:</span><span id="areaObj">-</span></div>
-            <div class="info-item"><span>ID Pelanggar:</span><span id="areaId">-</span></div>
-            <div class="info-item"><span>Waktu Kejadian:</span><span id="areaTime">-</span></div>
-        </div>
-        <div class="card">
-            <h2>3. Aktuator (Servo & Sinyal)</h2>
-            <div id="statusAct" class="status-box bg-aman">PALANG TERBUKA</div>
-            <div class="info-item"><span>Posisi Servo Utama:</span><span id="actServo">90°</span></div>
-            <div class="info-item"><span>Status Mekanis Pintu:</span><span id="status-palang" style="color: #38bdf8; font-weight: bold;">-</span></div>
-            <div class="info-item"><span>Lampu Sinyal:</span><span id="actLamp">HIJAU</span></div>
-            <div class="info-item"><span>Latensi Mekanis:</span><span id="actLatency">-</span></div>
-        </div>
-        <div class="card">
-            <h2>4. Sensor Kepergian</h2>
-            <div id="statusKep" class="status-box bg-aman">STANDBY</div>
-            <div class="info-item"><span>Status Loop:</span><span id="kepLoop">Inaktif</span></div>
-            <div class="info-item"><span>Deteksi Roda:</span><span id="kepWheel">-</span></div>
-            <div class="info-item"><span>Waktu Lepas:</span><span id="kepTime">-</span></div>
-        </div>
-    </div>
-
-    <!-- Logger -->
-    <div class="card">
-        <h2>Data Logger Master Terpadu</h2>
+    <div class="logger-card">
+        <h2 style="margin-top:0; font-size:14px; color:#38bdf8; border-bottom:1px solid #1f2937; padding-bottom:6px;">
+            Data Logger Terpadu (Analisis Rantai Pelacakan Waktu Jaringan Broker MQTT)
+        </h2>
         <div class="table-wrapper">
             <table>
                 <thead>
                     <tr>
-                        <th>Waktu Sistem</th>
-                        <th>Asal Komponen</th>
-                        <th>Jenis Event</th>
+                        <th>Waktu Dashboard (Web)</th>
+                        <th>Topik</th>
+                        <th>Event</th>
                         <th>ID Objek</th>
                         <th>Klasifikasi</th>
-                        <th>Waktu Perangkat</th>
-                        <th>Latensi</th>
-                        <th>Indikator Lampu</th>
+                        <th>TS Kamera 1 (Dtg)</th>
+                        <th>TS Kamera 2 (Area)</th>
+                        <th>TS ESP32 Siap</th>
+                        <th>TS Selesai (Prg)</th>
+                        <th>Posisi Servo (1-4)</th>
+                        <th>Kondisi Palang</th>
+                        <th>Lampu Sinyal</th>
+                        <th>Latensi Paket</th>
                     </tr>
                 </thead>
                 <tbody id="masterLogBody"></tbody>
@@ -136,157 +247,268 @@
 
 <script>
     let masterDatabaseLog = [];
-    const img1 = document.getElementById("stream1");
-    const img2 = document.getElementById("stream2");
+    
+    const arms = {
+        1: document.getElementById("gateArm1"),
+        2: document.getElementById("gateArm2"),
+        3: document.getElementById("gateArm3"),
+        4: document.getElementById("gateArm4")
+    };
+    
+    const degTxt = {
+        1: document.getElementById("degS1"),
+        2: document.getElementById("degS2"),
+        3: document.getElementById("degS3"),
+        4: document.getElementById("degS4")
+    };
 
     const MQTT_HOST = "f89f938116df4dee81d5215df5ba4782.s1.eu.hivemq.cloud";
     const MQTT_PORT = 8884; 
-    const CLIENT_ID = "WebMasterDashboard_" + Math.random().toString(16).substr(2, 8);
+    const CLIENT_ID = "HighPrecisionWebLogger_v2_" + Math.random().toString(16).substr(2, 8);
 
     const client = new Paho.MQTT.Client(MQTT_HOST, MQTT_PORT, CLIENT_ID);
     client.onMessageArrived = onMessageArrived;
+    client.onConnectionLost = (resp) => {
+        const badge = document.getElementById("mqttStatus");
+        badge.innerText = "MQTT DISCONNECTED";
+        badge.className = "mqtt-badge";
+    };
     
     client.connect({
         useSSL: true, 
         userName: "intelligent", 
         password: "Penem2018",
         onSuccess: () => {
-            // Subscribe ke topik data
+            const badge = document.getElementById("mqttStatus");
+            badge.innerText = "MQTT CONNECTED (HIVEMQ)";
+            badge.className = "mqtt-badge mqtt-connected";
+            
             client.subscribe("servo");
             client.subscribe("servo_ack");
-            // Subscribe ke topik video stream
-            client.subscribe("detection/image1");
-            client.subscribe("detection/image2");
-            console.log("[MQTT] Terhubung & Monitoring Video + Data.");
+            client.subscribe("monitoring/esp32_kepergian");
+            console.log("[MQTT] Berhasil Monitoring Lintasan Kiri-Kanan 4-Servo.");
         },
         onFailure: (error) => {
             console.error("[MQTT ERROR] Gagal Terhubung:", error.errorMessage);
         }
     });
 
+    function hitungLatensiMs(tsAwal, tsAkhir) {
+        if (!tsAwal || tsAwal === "-" || tsAwal.includes("TIME_ERROR") || tsAwal === "MANUAL_TRIGGER") return "-";
+        try {
+            const t1 = new Date(tsAwal.replace(/-/g, '/'));
+            const t2 = tsAkhir ? new Date(tsAkhir) : new Date();
+            const selisih = t2 - t1;
+            return isNaN(selisih) ? "-" : selisih + " ms";
+        } catch (e) { return "-"; }
+    }
+
     function onMessageArrived(message) {
         const topic = message.destinationName;
         const payload = message.payloadString;
-
-        // LOGIKA STREAMING VIDEO
-        if (topic === "detection/image1") {
-            img1.src = "data:image/jpeg;base64," + payload;
-            return; // Berhenti di sini agar tidak memproses JSON di bawah
-        }
-        if (topic === "detection/image2") {
-            img2.src = "data:image/jpeg;base64," + payload;
-            return;
-        }
-
-        // LOGIKA DATA MONITORING (JSON)
-        const localTime = new Date().toLocaleString('id-ID');
+        const nowWeb = new Date();
+        const localTimeStr = nowWeb.toLocaleString('id-ID');
+        
         try {
             const data = JSON.parse(payload);
-            let logRow = {
-                waktu_web: localTime, komponen: "", event: data.msg || "-",
-                id: data.id !== undefined ? data.id : "-", cls: data.class || "-",
-                waktu_alat: data.timestamp || data.train_timestamp || "-",
-                latensi: "-", lampu: "-"
-            };
             
-            if(data.gate_status) document.getElementById("status-palang").innerText = data.gate_status;
+            let logRow = {
+                waktu_web: localTimeStr, topik: topic, event: data.msg || "HEARTBEAT",
+                id: data.id !== undefined ? data.id : "-", cls: data.class || "-",
+                ts_cam1: "-", ts_cam2: "-", ts_esp_ready: "-", ts_prg: "-",
+                servo: "-", status_palang: "-", lampu: "-", latensi: "-"
+            };
 
+            // 1. PROSES TOPIK: servo
             if (topic === "servo") {
-                processServoLogic(data, logRow);
-            } 
+                if (data.msg === "dtg") {
+                    logRow.ts_cam1 = data.timestamp || "-";
+                    logRow.latensi = hitungLatensiMs(data.timestamp, nowWeb);
+                    
+                    updateCard("cardDtg", "bg-danger", "KERETA MENDEKAT");
+                    document.getElementById("txtDtgId").innerText = data.id;
+                    document.getElementById("txtDtgClass").innerText = data.class;
+                    document.getElementById("txtDtgTime").innerText = data.timestamp || "-";
+                    document.getElementById("txtDtgLat").innerText = logRow.latensi;
+                    
+                    updateCard("cardAct", "bg-processing", "PROSES TUTUP");
+                } 
+                else if (data.msg === "prg") {
+                    logRow.id = data.id || "-";
+                    logRow.cls = data.class || "-";
+                    logRow.ts_cam1 = data.cam_dtg_timestamp || "-";
+                    logRow.ts_esp_ready = data.esp_ready_timestamp || "-";
+                    logRow.ts_prg = data.timestamp || "-";
+                    logRow.latensi = hitungLatensiMs(data.timestamp, nowWeb);
+
+                    updateCard("cardDtg", "bg-standby", "STANDBY");
+                    updateCard("cardKep", "bg-safe", "SELESAI LEWAT");
+                    document.getElementById("txtKepLoop").innerText = "Inaktif";
+                    document.getElementById("txtKepTime").innerText = data.timestamp || "-";
+                }
+                else if (data.msg === "DANGER" || data.msg === "SAFE") {
+                    logRow.ts_cam2 = data.timestamp || "-";
+                    logRow.latensi = hitungLatensiMs(data.timestamp, nowWeb);
+                    
+                    const isDanger = data.msg === "DANGER";
+                    updateCard("cardArea", isDanger ? "bg-danger" : "bg-safe", isDanger ? "TERGANGGU / BAHAYA" : "STERIL / AMAN");
+                    document.getElementById("txtAreaStatus").innerText = data.msg;
+                    document.getElementById("txtAreaObj").innerText = data.class || "-";
+                    document.getElementById("txtAreaTime").innerText = data.timestamp || "-";
+                    document.getElementById("txtAreaLat").innerText = logRow.latensi;
+                }
+            }
+
+            // 2. PROSES TOPIK: servo_ack (Feedback Pengendali 4 Palang Pintu)
             else if (topic === "servo_ack") {
-                processAckLogic(data, logRow);
+                let s1 = data.servo1_pos !== undefined ? data.servo1_pos : 90;
+                let s2 = data.servo2_pos !== undefined ? data.servo2_pos : 90;
+                let s3 = data.servo3_pos !== undefined ? data.servo3_pos : 90;
+                let s4 = data.servo4_pos !== undefined ? data.servo4_pos : 90;
+
+                logRow.servo = `S1:${s1}°|S2:${s2}°|S3:${s3}°|S4:${s4}°`;
+                logRow.status_palang = data.gate_status || "-";
+                
+                // 🟢 PERBAIKAN: Sinkronisasi nama variabel latensi dengan ESP32 (esp_action_latency_ms)
+                logRow.latensi = (data.esp_action_latency_ms !== undefined) ? data.esp_action_latency_ms + " ms" : "-";
+                
+                // 🟢 PERBAIKAN: Mengisi data logger rantai waktu dari payload sinkronisasi Kamera 2
+                if (data.arrival_mqtt_timestamp) { logRow.ts_cam1 = data.arrival_mqtt_timestamp; document.getElementById("txtDtgTime").innerText = data.arrival_mqtt_timestamp; }
+                if (data.detection_timestamp) { logRow.ts_cam2 = data.detection_timestamp; document.getElementById("txtAreaTime").innerText = data.detection_timestamp; }
+                if (data.execution_timestamp) logRow.ts_esp_ready = data.execution_timestamp;
+
+                let lMerah = data.red_led === 1;
+                let lHijau = data.green_led === 1;
+                logRow.lampu = `M: ${lMerah?'ON':'OFF'} | H: ${lHijau?'ON':'OFF'}`;
+
+                // Update Telemetry Aktuator Card
+                document.getElementById("txtActServo").innerText = `${s1}° | ${s2}° | ${s3}° | ${s4}°`;
+                document.getElementById("txtActGateStatus").innerText = data.gate_status || "-";
+                document.getElementById("txtActLat").innerText = logRow.latensi;
+                document.getElementById("txtActLamp").innerText = data.red_led ? "Merah" : "Hijau";
+
+                // Update Sudut Animasi CSS secara Presisi (Symmetrical Left vs Right)
+                const angles = [s1, s2, s3, s4];
+                for(let i = 1; i <= 4; i++) {
+                    degTxt[i].innerText = angles[i-1] + "°";
+                    let angleVal = angles[i-1];
+                    
+                    if (i === 1 || i === 2) {
+                        // Sisi Kiri: 90° (Terbuka/Tegak) -> -90deg CSS, 180° (Tertutup) -> -180deg CSS
+                        arms[i].style.transform = `rotate(${-angleVal}deg)`;
+                    } else {
+                        // Sisi Kanan: 90° (Terbuka/Tegak) -> 90deg CSS, 0° (Tertutup) -> 0deg CSS
+                        arms[i].style.transform = `rotate(${angleVal}deg)`;
+                    }
+                }
+
+                // Pengondisian Dasbor Sinyal Utama JPL Vertikal
+                const ledTop = document.getElementById("jplLedTop");
+                const ledBottom = document.getElementById("jplLedBottom");
+                
+                if (lMerah) {
+                    ledTop.className = "jpl-led top-red active";
+                    ledBottom.className = "jpl-led bottom-red active";
+                    updateCard("cardSinyal", "bg-danger", "BERKEDIP AKTIF");
+                    updateCard("cardAct", "bg-danger", data.gate_status || "TERKUNCI");
+                } else {
+                    ledTop.className = "jpl-led";
+                    ledBottom.className = "jpl-led";
+                    updateCard("cardSinyal", "bg-safe", "PADAM");
+                    updateCard("cardAct", "bg-safe", "PALANG TERBUKA");
+                }
+
+                if (data.msg === "dtg") {
+                    updateCard("cardKep", "bg-processing", "MONITOR RODA");
+                    document.getElementById("txtKepLoop").innerText = "Aktif Mencari Roda...";
+                } else if (data.msg === "prg") {
+                    updateCard("cardAct", "bg-safe", "PALANG TERBUKA");
+                }
+            }
+
+            // 3. PROSES TOPIK: monitoring/esp32_kepergian
+            else if (topic === "monitoring/esp32_kepergian") {
+                logRow.event = "HEARTBEAT";
+                logRow.status_palang = data.status || "-";
+                logRow.cls = data.device || "-";
+                
+                document.getElementById("txtKepSensor").innerText = `${data.sensor_status} (${data.sensor_raw})`;
+                document.getElementById("txtKepHb").innerText = `Uptime: ${data.uptime_sec}s`;
+                
+                if (data.status === "MONITORING_TRAIN") {
+                    updateCard("cardKep", "bg-processing", "MONITOR RODA");
+                    document.getElementById("txtKepLoop").innerText = "Aktif Mencari Roda...";
+                } else if (!document.getElementById("cardKep").className.includes("bg-safe")) {
+                    updateCard("cardKep", "bg-standby", "STANDBY");
+                    document.getElementById("txtKepLoop").innerText = "Inaktif";
+                }
             }
 
             masterDatabaseLog.push(logRow);
-            renderTableRecord(logRow);
+            renderTableRow(logRow);
 
-        } catch (e) { 
-            // Abaikan error parse jika memang bukan format JSON (untuk keamanan)
+        } catch (err) {
+            console.warn("Mengabaikan payload non-protokol:", err);
         }
     }
 
-    function processServoLogic(data, logRow) {
-        if (data.msg === "dtg") {
-            logRow.komponen = "Kamera Kedatangan (YOLO)";
-            updateStatusCard("statusDtg", "bg-bahaya", "KERETA MENDEKAT");
-            document.getElementById("dtgId").innerText = data.id;
-            document.getElementById("dtgClass").innerText = data.class;
-            document.getElementById("dtgTime").innerText = data.timestamp || "-";
-            updateStatusCard("statusAct", "bg-proses", "PROSES TUTUP");
-        } 
-        else if (data.msg === "prg") {
-            logRow.komponen = "Kamera / Sensor";
-            updateStatusCard("statusDtg", "bg-aman", "STANDBY");
-            updateStatusCard("statusKep", "bg-aman", "SELESAI");
-            document.getElementById("kepLoop").innerText = "Inaktif";
-            document.getElementById("kepTime").innerText = data.timestamp || "-";
-        }
-        else if (data.msg === "DANGER" || data.msg === "SAFE") {
-            logRow.komponen = "Kamera Perlintasan";
-            updateStatusCard("statusArea", data.msg === "DANGER" ? "bg-bahaya" : "bg-aman", data.msg === "DANGER" ? "TERGANGGU / BAHAYA" : "STERIL / AMAN");
-            document.getElementById("areaObj").innerText = data.class || "-";
-            document.getElementById("areaId").innerText = data.id !== undefined ? data.id : "-";
-            document.getElementById("areaTime").innerText = data.timestamp || "-";
-        }
-    }
-
-    function processAckLogic(data, logRow) {
-        logRow.komponen = "Palang Servo (ESP32)";
-        logRow.latensi = (data.action_latency_ms || "0") + " ms";
-        logRow.lampu = `M: ${data.red_led_status==1?'ON':'OFF'} | H: ${data.green_led_status==1?'ON':'OFF'}`;
-
-        document.getElementById("actServo").innerText = (data.servo_pos_final || "90") + "°";
-        document.getElementById("actLamp").innerText = data.red_led_status === 1 ? "MERAH AKTIF" : "HIJAU AKTIF";
-        document.getElementById("actLatency").innerText = logRow.latensi;
-
-        if (data.msg === "dtg") {
-            updateStatusCard("statusAct", "bg-bahaya", "TERKUNCI / TERTUTUP");
-            updateStatusCard("statusKep", "bg-proses", "MONITOR RODA");
-            document.getElementById("kepLoop").innerText = "Aktif Mencari Roda";
-        } else if (data.msg === "prg") {
-            updateStatusCard("statusAct", "bg-aman", "PALANG TERBUKA");
-        }
-    }
-
-    function updateStatusCard(id, className, text) {
+    function updateCard(id, className, text) {
         const el = document.getElementById(id);
-        el.className = "status-box " + className;
-        el.innerText = text;
+        if (el) {
+            el.className = "status-box " + className;
+            el.innerText = text;
+        }
     }
 
-    function renderTableRecord(row) {
+    function renderTableRow(row) {
         const tbody = document.getElementById("masterLogBody");
         const tr = tbody.insertRow(0);
+        
+        let badgeClass = "badge-hb";
+        if(row.event === "dtg") badgeClass = "badge-dtg";
+        if(row.event === "prg") badgeClass = "badge-prg";
+        if(row.event === "DANGER") badgeClass = "badge-danger";
+        if(row.event === "SAFE") badgeClass = "badge-safe";
+
         tr.innerHTML = `
             <td>${row.waktu_web}</td>
-            <td style="color:#38bdf8;">${row.komponen}</td>
-            <td><span class="badge ${row.event=='dtg'?'bg-bahaya':row.event=='prg'?'bg-aman':'bg-proses'}">${row.event}</span></td>
-            <td>${row.id}</td>
+            <td style="color:#aaadb5; font-family:monospace;">${row.topik}</td>
+            <td><span class="badge ${badgeClass}">${row.event}</span></td>
+            <td style="font-weight:bold; color:#38bdf8;">${row.id}</td>
             <td>${row.cls}</td>
-            <td>${row.waktu_alat}</td>
-            <td style="font-weight:bold; color:#f59e0b;">${row.latensi}</td>
+            <td>${row.ts_cam1}</td>
+            <td>${row.ts_cam2}</td>
+            <td>${row.ts_esp_ready}</td>
+            <td>${row.ts_prg}</td>
+            <td style="color:#f59e0b; font-weight:bold; font-family:monospace;">${row.servo}</td>
+            <td>${row.status_palang}</td>
             <td style="color:#9ca3af;">${row.lampu}</td>
+            <td class="latency-text">${row.latensi}</td>
         `;
     }
 
     function downloadMasterCSV() {
-        if(masterDatabaseLog.length === 0) return alert("Tidak ada data!");
-        let csv = "Waktu_Web,Komponen,Event,ID,Klasifikasi,Waktu_Alat,Latensi,Lampu\n";
+        if(masterDatabaseLog.length === 0) return alert("Belum ada data log transmisi terkumpul!");
+        
+        let csv = "Waktu_Dashboard_Web,Topik_MQTT,Event_Message,ID_Objek,Klasifikasi,TS_Kamera_1_Dtg,TS_Kamera_2_Area,TS_ESP32_Siap,TS_Selesai_Prg,Matriks_Posisi_Servo,Kondisi_Palang,Status_Lampu_Sinyal,Latensi_Paket\n";
+        
         masterDatabaseLog.forEach(r => {
-            csv += `"${r.waktu_web}","${r.komponen}","${r.event}","${r.id}","${r.cls}","${r.waktu_alat}","${r.latensi}","${r.lampu}"\n`;
+            csv += `"${r.waktu_web}","${r.topik}","${r.event}","${r.id}","${r.cls}","${r.ts_cam1}","${r.ts_cam2}","${r.ts_esp_ready}","${r.ts_prg}","${r.servo}","${r.status_palang}","${r.lampu}","${r.latensi}"\n`;
         });
-        const blob = new Blob([csv], { type: 'text/csv' });
+        
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "LOG_MONITORING_PERLINTASAN.csv";
-        a.click();
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "ANALISIS_LATENSI_4SERVO_PERLINTASAN.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 
     function resetDashboardData() {
-        if(confirm("Reset semua data?")) {
-            location.reload(); // Paling bersih untuk mereset stream & log
+        if(confirm("Apakah Anda yakin ingin membersihkan seluruh data log analitik latensi di layar saat ini?")) {
+            location.reload();
         }
     }
 </script>
