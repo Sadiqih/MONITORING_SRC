@@ -49,7 +49,7 @@
 
         /* Pengaturan Sisi Kiri (Servo 1 & 2) */
         .pivot-left .gate-pivot-node { left: 15px; }
-        .pivot-left .gate-arm-bar { left: 25px; transform-origin: left center; transform: rotate(-90deg); }
+        .pivot-left .gate-arm-bar { left: 25px; transform-origin: left center; transform: rotate(90deg); }
 
         /* Pengaturan Sisi Kanan (Servo 3 & 4) */
         .pivot-right .gate-pivot-node { right: 15px; }
@@ -71,8 +71,8 @@
         /* Komponen Dasbor Sinyal Utama JPL (Vertikal) */
         .jpl-signal-tower { display: flex; flex-direction: column; align-items: center; background: #000; padding: 12px 8px; border-radius: 30px; border: 3px solid #374151; width: 45px; margin: 10px auto; box-shadow: 0 4px 10px rgba(0,0,0,0.7); gap: 12px; }
         .jpl-led { width: 26px; height: 26px; border-radius: 50%; background-color: #1a1a1a; border: 2px solid #4b5563; box-shadow: inset 0 0 5px rgba(0,0,0,0.9); transition: all 0.2s; }
-        .jpl-led.top-red.active { background-color: #ef4444; box-shadow: 0 0 15px #ef4444; animation: blinkJplTop 0.5s infinite alternate; }
-        .jpl-led.bottom-red.active { background-color: #ef4444; box-shadow: 0 0 15px #ef4444; animation: blinkJplBottom 0.5s infinite alternate; }
+        .jpl-led.top-red.active { background-color: #ef4444; box-shadow: 0 0 15px #ef4444;}                  
+        .jpl-led.bottom-green.active { background-color: #10b981; box-shadow: 0 0 15px #10b981;}
         @keyframes blinkJplTop { 0% { opacity: 0.2; } 100% { opacity: 1; } }
         @keyframes blinkJplBottom { 0% { opacity: 1; } 100% { opacity: 0.2; } }
 
@@ -159,7 +159,7 @@
 
         <div class="grid-5col">
             <div class="card">
-                <h2>1. Kamera Kedatangan (Cam 1)</h2>
+                <h2 style="text-align: center">Kedatangan Kereta</h2>
                 <div id="cardDtg" class="status-box bg-standby">STANDBY</div>
                 <div class="info-group">
                     <div class="info-item"><span>ID Kereta:</span><span id="txtDtgId">-</span></div>
@@ -170,7 +170,7 @@
             </div>
 
             <div class="card">
-                <h2>2. Kamera Lintasan (Cam 2)</h2>
+                <h2 style="text-align: center">Kondisi Area Perlintasan</h2>
                 <div id="cardArea" class="status-box bg-safe">STERIL / AMAN</div>
                 <div class="info-group">
                     <div class="info-item"><span>Hambatan:</span><span id="txtAreaStatus">CLEAR</span></div>
@@ -181,7 +181,7 @@
             </div>
 
             <div class="card">
-                <h2>3. Kontrol Aktuator Pintu</h2>
+                <h2 style="text-align: center">Status Palang Pintu</h2>
                 <div id="cardAct" class="status-box bg-safe">PALANG TERBUKA</div>
                 <div class="info-group">
                     <div class="info-item"><span>Matriks Servo:</span><span id="txtActServo" class="highlight-val">90° | 90° | 90° | 90°</span></div>
@@ -192,7 +192,7 @@
             </div>
 
             <div class="card">
-                <h2>4. Sensor Kepergian (ESP32)</h2>
+                <h2 style="text-align: center">Kepergian Kereta</h2>
                 <div id="cardKep" class="status-box bg-standby">STANDBY</div>
                 <div class="info-group">
                     <div class="info-item"><span>Loop Roda:</span><span id="txtKepLoop">Inaktif</span></div>
@@ -203,7 +203,7 @@
             </div>
 
             <div class="card" style="align-items: center;">
-                <h2>5. Sinyal Utama JPL</h2>
+                <h2>Lampu Sinyal</h2>
                 <div id="cardSinyal" class="status-box bg-safe" style="width:100%; margin-bottom: 5px;">PADAM</div>
                 
                 <div class="jpl-signal-tower">
@@ -379,7 +379,7 @@
 
                 let lMerah = data.red_led === 1;
                 let lHijau = data.green_led === 1;
-                logRow.lampu = `M: ${lMerah?'ON':'OFF'} | H: ${lHijau?'ON':'OFF'}`;
+                logRow.lampu = `H ${lHijau?'ON':'OFF'} | M: ${lMerah?'ON':'OFF'}`;
 
                 // Update Telemetry Aktuator Card
                 document.getElementById("txtActServo").innerText = `${s1}° | ${s2}° | ${s3}° | ${s4}°`;
@@ -395,7 +395,7 @@
                     
                     if (i === 1 || i === 2) {
                         // Sisi Kiri: 90° (Terbuka/Tegak) -> -90deg CSS, 180° (Tertutup) -> -180deg CSS
-                        arms[i].style.transform = `rotate(${-angleVal}deg)`;
+                        arms[i].style.transform = `rotate(${180-angleVal}deg)`;
                     } else {
                         // Sisi Kanan: 90° (Terbuka/Tegak) -> 90deg CSS, 0° (Tertutup) -> 0deg CSS
                         arms[i].style.transform = `rotate(${angleVal}deg)`;
@@ -409,12 +409,12 @@
                 if (lMerah) {
                     ledTop.className = "jpl-led top-red active";
                     ledBottom.className = "jpl-led bottom-red active";
-                    updateCard("cardSinyal", "bg-danger", "BERKEDIP AKTIF");
+                    updateCard("cardSinyal", "bg-danger", "DANGER");
                     updateCard("cardAct", "bg-danger", data.gate_status || "TERKUNCI");
                 } else {
-                    ledTop.className = "jpl-led";
-                    ledBottom.className = "jpl-led";
-                    updateCard("cardSinyal", "bg-safe", "PADAM");
+                    ledTop.className = "jpl-led top-green active";
+                    ledBottom.className = "jpl-led bottom-green active";
+                    updateCard("cardSinyal", "bg-safe", "SAFE");
                     updateCard("cardAct", "bg-safe", "PALANG TERBUKA");
                 }
 
